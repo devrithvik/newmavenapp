@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+    tools {
+        maven 'maven'
+    }
+    environment{
+        dockerImage = ''
+        repository = 'rithvikyadavdocker/springapp'
+    }
+    stages {
+        stage('Hello') {
+            steps {
+               checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: 'https://github.com/devrithvik/springbootcrudk8s.git']]])
+            }
+        }
+         stage('maven build') {
+            steps {
+                sh 'mvn -B -DskipTests clean install'
+                //archiveArtifacts artifacts: '**/*.war', followSymlinks: false
+             }
+        }
+        stage('docker build ') {
+            steps {
+                script {
+                    dockerImage = docker.build($repository:$BUILD_NUMBER)
+                }
+             }
+        }
+         stage('docker build ') {
+            steps {
+                script {
+                withDockerRegistry(credentialsId: 'dockerhub_cred') {
+                    dockerImage.push()
+                 }
+                }
+             }
+        }
+        stage('update manifest') {
+            steps {
+                
+                sh 'sed  -i  "s/latest/$BUILD_NUMBER/g" app_db_deployments/app-deployment.yaml'
+             }
+        }
+        stage('copy  manifests') {
+            steps {
+                // I have configured passwordless authentication
+                
+                sh 'scp  app_db_deployments/*  rithvik@192.168.64.31:/home/rithvik/k8s/'
+                
+                // I  have copied the configmap and secrets yaml files , they no need to be copied for every build
+                //because they are not disturbed once deployed.
+             }
+        }
+        
+        stage('run manifest') {
+            steps {
+                sshagent(credentials: ['sshcred']) {
+                    // run db first and then app manifest
+                    // config maps and secrets are already deployed
+                    
+                sh 'kubectl apply -f /home/rithvik/k8s/db-deployment.yaml '
+                sh 'kubectl apply -f /home/rithvik/k8s/app-deployment.yaml'
+                sh 'rm  /home/rithvik/k8s/*'
+            }
+        }
+    }
+    stage('reupdate manifest') {
+            steps {
+                //replace the latest tag for updating it in the next version (build)
+                sh 'sed  -i "s/$BUILD_NUMBER/latest/g"  app_db_deployments/app-deployment.yaml'
+             }
+        }
+  }
+}
