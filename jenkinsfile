@@ -10,7 +10,7 @@ pipeline {
     stages {
         stage('Hello') {
             steps {
-               checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: 'https://github.com/devrithvik/springbootcrudk8s.git']]])
+               checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: 'https://github.com/devrithvik/springboot-mysql.git']]])
             }
         }
          stage('maven build') {
